@@ -14,12 +14,13 @@ int main(int argc, char **argv)
   printf("Choose Which Test to Run:\n");
   printf("1. Sequential Workload Test\n");
   printf("2. Random Workload Test\n");
+  printf("3. Hot/Cold Workload Test (80:20)\n");
   int choice = 0;
-  while(choice != 1 && choice != 2) {
-      printf("Enter 1 or 2: ");
+  while(choice != 1 && choice != 2 && choice != 3) {
+      printf("Enter 1 or 2 or 3 : ");
       scanf("%d", &choice);
-      if(choice != 1 && choice != 2) {
-          printf("Invalid choice. Please enter 1 or 2.\n");
+      if(choice != 1 && choice != 2 && choice != 3) {
+          printf("Invalid choice. Please enter 1 or 2 or 3.\n");
       }
   }
 
@@ -38,6 +39,7 @@ int main(int argc, char **argv)
   printf("Choose how many times to repeat the test (Must be between 1 and 10):\n");
   int repeat_count = -1;
   while(repeat_count < 1 || repeat_count > 10) {
+      printf("Enter a number between 1 and 10: ");
       scanf("%d", &repeat_count);
       if(repeat_count < 1 || repeat_count > 10) {
           printf("Invalid choice. Please enter a number between 1 and 10:\n");

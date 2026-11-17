@@ -15,6 +15,13 @@ typedef struct {
 } BlockInfo;
 
 static BlockInfo blocks[Total_Blocks];
+
+//USED Block management
+static uint32_t *used_block_FIFO = NULL;
+static uint32_t used_block_head = 0;
+static uint32_t used_block_tail = 0;
+
+
 static uint32_t L2PMAP[Total_Pages];
 static uint32_t P2LMAP[Total_Pages];  
 
@@ -62,6 +69,8 @@ void FTL_init(uint32_t over_provisioning_percentage)
     Write_Count_HOST = 0;
     Write_Count_REAL = 0;
 
+    //USED Block_FIFO initilaization
+    USED_BLOCK_FIFO_INIT();
 
     printf("FTL initialized successfully.\n");
     printf("Total Pages: %u\n", Total_Pages);
@@ -184,6 +193,11 @@ FTL_STATUS FTL_WRITE(uint32_t LPA, PhysicalAddress *addr)
     WritePointer_HOST.page++;
     *addr = NAND_Decode(new_ppa);
 
+    //if target block's page is full -->  get a block is a used block FIFO QUEUE
+    if (WritePointer_HOST.page == PAGES_PER_BLOCK) {      // 이 쓰기로 블록이 가득 참
+    USED_BLOCK_FIFO_IN((uint32_t)WritePointer_HOST.block);
+    }
+
     Write_Count_HOST++;
     Write_Count_REAL++;
     //printf the number of free blocks after the write operation
@@ -245,6 +259,7 @@ bool Garbage_Collection_GREEDY(void)
             L2PMAP[LPA] = new_ppn;
             P2LMAP[new_ppn] = LPA;  // Update the reverse mapping
             blocks[WritePointer_GC.block].valid_page_cnt++;
+            blocks[VICTIM_BLOCK].valid_page_cnt--;
             WritePointer_GC.page++;
             Write_Count_REAL++;
         }
@@ -282,4 +297,91 @@ void reset_WAF(void)
 uint32_t get_Total_Logical_Pages(void)
 {
     return Total_Logical_Pages;
+}
+
+
+void USED_BLOCK_FIFO_INIT(void)
+{
+    free(used_block_FIFO);   //ERASE
+    used_block_FIFO = (uint32_t *)malloc(sizeof(uint32_t)*Total_Blocks);
+    used_block_head = 0;
+    used_block_tail = 0;
+    for(uint32_t i=0; i<Total_Blocks;i++) 
+    {
+        used_block_FIFO[i] = INVALID_ADDR;
+    }
+}
+
+void USED_BLOCK_FIFO_IN(uint32_t Block_Number)
+{
+    used_block_FIFO[used_block_tail] = Block_Number;
+    used_block_tail = (used_block_tail+1)%Total_Blocks;
+}
+
+uint32_t USED_BLOCK_FIFO_OUT(void)
+{
+    uint32_t result = used_block_FIFO[used_block_head];
+    used_block_head = (used_block_head+1)%Total_Blocks;
+    return result;
+}
+
+
+bool Garbage_Collection_FIFO()
+{
+    
+    //1. Find the victim block
+    uint32_t VICTIM_BLOCK = USED_BLOCK_FIFO_OUT();
+
+    //3. Move the valid pages from the victim block to the new block
+    for(int i=0;i<PAGES_PER_BLOCK;i++)
+    {
+        // move valid pages to the new block
+        uint32_t old_ppn = VICTIM_BLOCK * PAGES_PER_BLOCK + i;
+        if(P2LMAP[old_ppn] != INVALID_ADDR) // if victim block has valid page
+        {
+            // 1. Check if the write pointer for GC is valid
+            if(WritePointer_GC.block < 0 || WritePointer_GC.page >= PAGES_PER_BLOCK)
+            {
+                //Find a free block for GC
+                WritePointer_GC.block = -1;
+                for(int j=0;j<Total_Blocks;j++)
+                {
+                    if(blocks[j].is_free)
+                    {
+                        WritePointer_GC.block = j;
+                        WritePointer_GC.page = 0;
+                        blocks[j].is_free = false;
+                        free_block_cnt--;
+                        break;
+                    }
+                }
+                if(WritePointer_GC.block < 0) {
+                    printf(" | Garbage Collection failed: No free block available for GC.\n");
+                    return false;  // No free blocks available for GC
+                }
+            }
+
+            // 2. Move the valid page to the new block
+            uint32_t LPA = P2LMAP[old_ppn];
+            uint32_t new_ppn = WritePointer_GC.block * PAGES_PER_BLOCK + WritePointer_GC.page;
+            L2PMAP[LPA] = new_ppn;
+            P2LMAP[new_ppn] = LPA;  // Update the reverse mapping
+            blocks[WritePointer_GC.block].valid_page_cnt++;
+            WritePointer_GC.page++;
+            Write_Count_REAL++;
+
+            if(WritePointer_GC.page >= PAGES_PER_BLOCK) USED_BLOCK_FIFO_IN(WritePointer_GC.block);
+        }
+        P2LMAP[old_ppn] = INVALID_ADDR;  // Invalidate the old physical pag
+    }
+
+    //4. Erase the victim block
+    blocks[VICTIM_BLOCK].valid_page_cnt = 0;
+    blocks[VICTIM_BLOCK].erase_cnt++;
+    blocks[VICTIM_BLOCK].is_free = true;
+    free_block_cnt++;
+
+    //5. print the result of garbage collection
+    printf(" | Garbage Collection completed. Victim Block: %u, New Block: %d | \n", VICTIM_BLOCK, WritePointer_GC.block);
+    return true;
 }

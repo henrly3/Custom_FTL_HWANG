@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "config.h"
+#include <stdlib.h>
 #include <stdio.h>
+#include "config.h"
 
 
 typedef struct {
@@ -29,17 +30,25 @@ typedef enum
 //FTL mappings
 void FTL_init(uint32_t over_provisioning_percentage);
 
-bool Garbage_Collection_GREEDY(void);
 
+//Garbage Collection
+bool Garbage_Collection_GREEDY(void);
+bool Garbage_Collection_FIFO(void);
 void Garbage_Collection_WEAR_LEVELING(void);
 bool Garbage_Collection_CHECK(void);
-
 uint32_t find_victim_block(void);
+uint32_t find_victim_block_FIFO(void);
+
+//Used block management_FIFO
+void USED_BLOCK_FIFO_INIT(void);
+void USED_BLOCK_FIFO_IN(uint32_t Block_Number);
+uint32_t USED_BLOCK_FIFO_OUT(void);
 
 //WAF 
 void reset_WAF(void);
 double calculate_WAF(void);
 
+//Command Execution
 PhysicalAddress NAND_Decode(uint32_t physical_page_number);
 FTL_STATUS FTL_READ(uint32_t LPA, PhysicalAddress *addr);
 FTL_STATUS FTL_WRITE(uint32_t LPA, PhysicalAddress *addr);
