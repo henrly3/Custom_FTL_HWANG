@@ -4,15 +4,20 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "config.h"
+#include "FTL.h"
 
-typedef struct {
-    uint32_t channel;
-    uint32_t package;
-    uint32_t die;
-    uint32_t plane;
-    uint32_t block;
-    uint32_t page;  // 내부에 logical page 번호를 포함할 수 있음
-} PhysicalAddress;
+typedef enum {
+    NAND_SUCCESS,
+    NAND_FAILURE,
+    NAND_INVALID_ADDRESS,
+    NAND_OUT_OF_SPACE
+} NAND_Status;
 
+
+void NAND_init(void);
+
+NAND_Status NAND_read(PhysicalAddress *addr, uint8_t *data);
+NAND_Status NAND_write(PhysicalAddress *addr, const uint8_t *data);
+NAND_Status NAND_erase(PhysicalAddress *addr);
 
 #endif
